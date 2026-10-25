@@ -105,7 +105,7 @@
             <i class="fa-solid fa-trash-arrow-up"></i>
             <span class="hidden sm:inline">Reset</span>
           </button>
-          <a href="https://wa.me/919052682774" target="_blank" class="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition">
+          <a href="https://web.whatsapp.com/send?phone=919052682774" target="whatsapp_tab" class="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition">
             <i class="fa-brands fa-whatsapp"></i>
             <span class="hidden sm:inline">+91 9052682774</span>
           </a>
@@ -261,7 +261,7 @@
     </main>
 
     <!-- Floating School WhatsApp Button -->
-    <a href="https://wa.me/919052682774" target="_blank" title="School WhatsApp" class="fixed bottom-6 right-6 bg-emerald-500 hover:bg-emerald-600 text-white w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition duration-200 z-50 text-2xl">
+    <a href="https://web.whatsapp.com/send?phone=919052682774" target="whatsapp_tab" title="School WhatsApp" class="fixed bottom-6 right-6 bg-emerald-500 hover:bg-emerald-600 text-white w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition duration-200 z-50 text-2xl">
       <i class="fa-brands fa-whatsapp"></i>
     </a>
 
@@ -400,7 +400,7 @@
         const { data, error } = await supabaseClient
           .from('school_students')
           .select('*')
-          .order('name', { ascending: true }); // Automatically retrieve ordered
+          .order('name', { ascending: true });
 
         if (error) throw error;
 
@@ -924,7 +924,7 @@
             return;
           }
 
-          // Sort entire database alphabetically by default
+          // Automatic A to Z Sorting for all uploaded students
           newDatabase.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 
           studentsDatabase = newDatabase;
@@ -1126,7 +1126,7 @@
               <button onclick="directShareWhatsAppToStudentPhone('${student.id}')" 
                       title="Generates Marks Sheet Image & opens WhatsApp for ${student.phone}"
                       class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow">
-                <i class="fa-brands fa-whatsapp text-sm"></i> Share WhatsApp
+                <i class="fa-brands fa-whatsapp text-sm"></i> Share WhatsApp (Image)
               </button>
             </div>
           </div>
@@ -1134,32 +1134,32 @@
       }).join('');
     }
 
-    // ================= DIRECT WHATSAPP IMAGE GENERATION & SHARING =================
+    // ================= DIRECT WHATSAPP IMAGE GENERATION & AUTO-PASTE LAUNCHER =================
     async function directShareWhatsAppToStudentPhone(studentId) {
       const student = studentsDatabase.find(s => String(s.id) === String(studentId));
       if (!student) return;
 
-      // 1. Clean phone number
+      // Clean phone number: always format to 91XXXXXXXXXX
       let rawPhone = student.phone || DEFAULT_WHATSAPP;
       let cleanPhone = String(rawPhone).replace(/\D/g, '');
       if (cleanPhone.length === 10) {
         cleanPhone = '91' + cleanPhone;
       } else if (cleanPhone.length > 10) {
-        cleanPhone = cleanPhone.slice(-10);
-        cleanPhone = '91' + cleanPhone;
+        cleanPhone = '91' + cleanPhone.slice(-10);
       }
 
-      // 2. Prepare hidden Memo DOM
+      // Populate Memo DOM
       prepareMemoDOM(student);
       const memoElement = document.getElementById("printableMarksMemo");
 
+      // Temporarily ensure modal is visible for rendering
       const wasHidden = document.getElementById("memoModal").classList.contains("hidden");
       if (wasHidden) {
         document.getElementById("memoModal").classList.remove("hidden");
       }
 
       try {
-        // 3. Render HTML Report to High-Res Image (scale: 2 for sharp crisp text)
+        // High-definition render of the memo card
         const canvas = await html2canvas(memoElement, {
           scale: 2,
           useCORS: true,
@@ -1170,7 +1170,10 @@
           const fileName = `${student.name.replace(/\s+/g, '_')}_MarksMemo.png`;
           const imageFile = new File([blob], fileName, { type: "image/png" });
 
-          // Web Share API (Works natively on Android/iOS browsers to send image directly to WhatsApp contact)
+          // Direct WhatsApp Web URL (avoids relogin & keeps active session)
+          const directWebUrl = `https://web.whatsapp.com/send?phone=${cleanPhone}`;
+
+          // Mobile device direct share (sends the actual photo directly to WhatsApp)
           if (navigator.canShare && navigator.canShare({ files: [imageFile] })) {
             try {
               await navigator.share({
@@ -1180,11 +1183,11 @@
               });
               return;
             } catch (shareErr) {
-              // User cancelled share or fallback to direct URL
+              // Share cancelled or failed, continue with Web fallback
             }
           }
 
-          // Fallback for Desktop/PC: Copy image to clipboard and trigger auto-download
+          // PC/Laptop Workflow: Auto-copy image to clipboard + download backup
           const downloadUrl = URL.createObjectURL(blob);
           const a = document.createElement("a");
           a.href = downloadUrl;
@@ -1193,26 +1196,31 @@
           a.click();
           document.body.removeChild(a);
 
+          let copiedToClipboard = false;
           try {
             await navigator.clipboard.write([
               new ClipboardItem({ "image/png": blob })
             ]);
-            alert(`Marks Memo Image copied to clipboard and saved as "${fileName}"!\n\nOpening WhatsApp chat for +${cleanPhone}. Just press Ctrl + V to send the image!`);
+            copiedToClipboard = true;
           } catch (clipErr) {
-            alert(`Marks Memo Image saved as "${fileName}"!\nOpening WhatsApp chat for +${cleanPhone}...`);
+            console.warn("Clipboard copy blocked:", clipErr);
           }
 
-          const defaultMsg = encodeURIComponent(`Greetings from K.V.R. High School. Here is the official Progress Report Card for ${student.name} (${student.class}).`);
-          const whatsappUrl = `https://wa.me/${cleanPhone}?text=${defaultMsg}`;
-          window.open(whatsappUrl, "_blank");
+          if (copiedToClipboard) {
+            alert(`✅ Photo ready for ${student.name}!\n\n1. WhatsApp Web will open now.\n2. In the chat, simply press [Ctrl + V] and hit Enter to send the photo.`);
+          } else {
+            alert(`✅ Photo saved as "${fileName}"!\n\n1. WhatsApp Web will open now.\n2. Attach the downloaded image to send.`);
+          }
+
+          // Open directly in existing or active WhatsApp Web session
+          window.open(directWebUrl, "whatsapp_tab");
 
         }, "image/png");
 
       } catch (e) {
         console.error("Image generation failed:", e);
-        // Fallback text link if canvas fails
-        const textMsg = encodeURIComponent(`*K.V.R. HIGH SCHOOL*\nMarks Sheet for *${student.name}* (${student.class})`);
-        window.open(`https://wa.me/${cleanPhone}?text=${textMsg}`, "_blank");
+        // Fallback if canvas fails
+        window.open(`https://web.whatsapp.com/send?phone=${cleanPhone}`, "whatsapp_tab");
       } finally {
         if (wasHidden) {
           document.getElementById("memoModal").classList.add("hidden");
@@ -1253,7 +1261,7 @@
                 <button onclick="editStudentPhone('${student.id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition">
                   <i class="fa-solid fa-pen-to-square"></i> Edit
                 </button>
-                <a href="https://wa.me/91${student.phone}?text=Hello%20Parent%2C%20greetings%20from%20KVR%20High%20School." target="_blank" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold transition">
+                <a href="https://web.whatsapp.com/send?phone=91${student.phone}&text=Hello%20Parent%2C%20greetings%20from%20KVR%20High%20School." target="whatsapp_tab" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold transition">
                   <i class="fa-brands fa-whatsapp"></i> Chat
                 </a>
                 <button onclick="deleteStudent('${student.id}')" title="Delete Student" class="px-2 py-1 bg-rose-50 hover:bg-rose-600 text-rose-600 hover:text-white rounded-lg text-xs font-semibold transition">
@@ -1312,7 +1320,7 @@
       };
 
       studentsDatabase.push(newStudent);
-      // Re-sort alphabetically after addition
+      // Keep alphabetical order after adding
       studentsDatabase.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
       await syncSingleStudentToCloud(newStudent);
 
@@ -1321,11 +1329,11 @@
       alert(`Student "${name}" added & saved to cloud!`);
     }
 
-    // Returns filtered students sorted Alphabetically (A to Z) by student name
+    // Always sort students Alphabetically (A to Z)
     function getFilteredStudents(filterText) {
       let list = studentsDatabase.filter(s => s.class === currentSelectedClass);
       
-      // ALPHABETICAL ORDER SORT (A to Z)
+      // Strict Alphabetical Order (A to Z)
       list.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 
       if (filterText) {
