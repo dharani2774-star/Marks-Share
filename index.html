@@ -267,7 +267,13 @@
 
   </div>
 
-  <!-- ================= 3. MARKS MEMO MODAL (USED FOR SCREEN DISPLAY & PNG GENERATION) ================= -->
+  <!-- Toast Notice -->
+  <div id="quickToast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/95 backdrop-blur-md text-white text-xs font-semibold px-5 py-3 rounded-full shadow-2xl z-50 hidden transition-all duration-300 flex items-center gap-2 border border-slate-700">
+    <i class="fa-solid fa-circle-check text-emerald-400 text-sm"></i>
+    <span id="toastMsg">Photo copied to clipboard! Opening WhatsApp...</span>
+  </div>
+
+  <!-- ================= 3. MARKS MEMO MODAL ================= -->
   <div id="memoModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 hidden overflow-y-auto p-4 flex justify-center items-center">
     <div class="bg-white rounded-3xl max-w-xl w-full p-4 sm:p-6 shadow-2xl relative my-6">
       
@@ -339,12 +345,6 @@
     </div>
   </div>
 
-  <!-- Toast Notification -->
-  <div id="quickToast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur-md text-white text-xs font-semibold px-4 py-2.5 rounded-full shadow-2xl z-50 hidden transition-all duration-300 flex items-center gap-2">
-    <i class="fa-solid fa-circle-check text-emerald-400"></i>
-    <span id="toastMsg">Photo copied to clipboard!</span>
-  </div>
-
   <!-- ================= 4. JAVASCRIPT ENGINE ================= -->
   <script>
     // ================= SUPABASE CONFIGURATION =================
@@ -367,7 +367,7 @@
     let currentClassViewMode = "share";
 
     let studentsDatabase = loadLocalFallback();
-    let waWindow = null; // Reusable WhatsApp window reference
+    let waWindow = null;
 
     function showToast(message) {
       const toast = document.getElementById("quickToast");
@@ -375,7 +375,7 @@
       if (!toast || !msg) return;
       msg.textContent = message;
       toast.classList.remove("hidden");
-      setTimeout(() => toast.classList.add("hidden"), 3500);
+      setTimeout(() => toast.classList.add("hidden"), 3000);
     }
 
     function setSyncStatus(msg, isSuccess = true) {
@@ -404,7 +404,7 @@
       } catch (err) {}
     }
 
-    // ================= SUPABASE CLOUD SYNC FUNCTIONS =================
+    // ================= SUPABASE CLOUD SYNC =================
     async function loadDataFromSupabase() {
       if (!supabaseClient) {
         setSyncStatus("Local Only (Supabase keys not configured)", false);
@@ -1140,7 +1140,7 @@
               </button>
               
               <button onclick="directShareWhatsAppToStudentPhone('${student.id}')" 
-                      title="Copies photo to clipboard and switches directly to student chat"
+                      title="Directly opens WhatsApp chat and copies photo to clipboard"
                       class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow">
                 <i class="fa-brands fa-whatsapp text-sm"></i> Share WhatsApp (Image)
               </button>
@@ -1150,7 +1150,7 @@
       }).join('');
     }
 
-    // ================= DIRECT WHATSAPP IMAGE GENERATION & AUTO-PASTE LAUNCHER =================
+    // ================= DIRECT WHATSAPP IMAGE & CHAT OPENER =================
     async function directShareWhatsAppToStudentPhone(studentId) {
       const student = studentsDatabase.find(s => String(s.id) === String(studentId));
       if (!student) return;
@@ -1164,11 +1164,20 @@
         cleanPhone = '91' + cleanPhone.slice(-10);
       }
 
-      // Populate Memo DOM
+      const directChatUrl = `https://web.whatsapp.com/send?phone=${cleanPhone}`;
+
+      // Open / switch directly to WhatsApp Web tab right away (prevents popup blockers)
+      if (waWindow && !waWindow.closed) {
+        waWindow.location.href = directChatUrl;
+        waWindow.focus();
+      } else {
+        waWindow = window.open(directChatUrl, "whatsapp_web");
+      }
+
+      // Populate Memo DOM to prepare canvas
       prepareMemoDOM(student);
       const memoElement = document.getElementById("printableMarksMemo");
 
-      // Temporarily ensure modal is visible for rendering
       const modalEl = document.getElementById("memoModal");
       const wasHidden = modalEl.classList.contains("hidden");
       if (wasHidden) {
@@ -1176,7 +1185,6 @@
       }
 
       try {
-        // High-definition render of the memo card
         const canvas = await html2canvas(memoElement, {
           scale: 2,
           useCORS: true,
@@ -1184,9 +1192,7 @@
         });
 
         canvas.toBlob(async (blob) => {
-          const directWebUrl = `https://web.whatsapp.com/send?phone=${cleanPhone}`;
-
-          // Mobile device direct share
+          // Mobile device direct share check
           if (navigator.canShare && navigator.canShare({ files: [new File([blob], `${student.name}_Marks.png`, { type: "image/png" })] })) {
             try {
               await navigator.share({
@@ -1198,41 +1204,20 @@
             } catch (shareErr) {}
           }
 
-          // 1. Copy image to Clipboard
-          let copied = false;
+          // Copy photo to clipboard
           try {
             await navigator.clipboard.write([
               new ClipboardItem({ "image/png": blob })
             ]);
-            copied = true;
+            showToast(`Photo copied! Press Ctrl + V in ${student.name}'s chat.`);
           } catch (clipErr) {
-            console.warn("Clipboard access denied:", clipErr);
-          }
-
-          showToast(copied 
-            ? `Photo copied! Press Ctrl+V in WhatsApp chat.` 
-            : `Opening WhatsApp chat...`
-          );
-
-          // 2. Open or reuse existing WhatsApp Web tab without refreshing everything
-          if (waWindow && !waWindow.closed) {
-            waWindow.location.href = directWebUrl;
-            waWindow.focus();
-          } else {
-            waWindow = window.open(directWebUrl, "whatsapp_web");
+            console.warn("Clipboard copy unavailable:", clipErr);
           }
 
         }, "image/png");
 
       } catch (e) {
-        console.error("Image generation failed:", e);
-        const directWebUrl = `https://web.whatsapp.com/send?phone=${cleanPhone}`;
-        if (waWindow && !waWindow.closed) {
-          waWindow.location.href = directWebUrl;
-          waWindow.focus();
-        } else {
-          waWindow = window.open(directWebUrl, "whatsapp_web");
-        }
+        console.error("Canvas image render failed:", e);
       } finally {
         if (wasHidden) {
           modalEl.classList.add("hidden");
@@ -1332,7 +1317,6 @@
       };
 
       studentsDatabase.push(newStudent);
-      // Keep alphabetical order after adding
       studentsDatabase.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
       await syncSingleStudentToCloud(newStudent);
 
@@ -1341,11 +1325,8 @@
       alert(`Student "${name}" added & saved to cloud!`);
     }
 
-    // Always sort students Alphabetically (A to Z)
     function getFilteredStudents(filterText) {
       let list = studentsDatabase.filter(s => s.class === currentSelectedClass);
-      
-      // Strict Alphabetical Order (A to Z)
       list.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 
       if (filterText) {
