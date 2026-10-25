@@ -1,0 +1,1373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>K.V.R. HIGH SCHOOL</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Cinzel:wght@700;800&display=swap" rel="stylesheet" />
+  <!-- SheetJS: Excel & CSV Parser -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- HTML2Canvas: Report Card to High-Res Image Generator -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <!-- Supabase JS Client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .school-title { font-family: 'Cinzel', serif; }
+
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    @media print {
+      body * { visibility: hidden; }
+      #printableMarksMemo, #printableMarksMemo * { visibility: visible; }
+      #printableMarksMemo {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        margin: 0;
+        padding: 20px;
+        border: 2px solid #000 !important;
+      }
+      .no-print { display: none !important; }
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col antialiased">
+
+  <!-- ================= 1. LOGIN SCREEN ================= -->
+  <div id="loginScreen" class="min-h-screen flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-sm w-full p-8 shadow-xl border border-slate-200 text-center">
+      
+      <div class="w-16 h-16 rounded-full bg-indigo-950 text-amber-400 flex items-center justify-center text-3xl mx-auto shadow-md mb-3">
+        <i class="fa-solid fa-graduation-cap"></i>
+      </div>
+      <h1 class="school-title text-2xl font-black text-indigo-950 tracking-wider mb-6">K.V.R. HIGH SCHOOL</h1>
+
+      <form onsubmit="handleLogin(event)" class="space-y-4 text-left">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Username</label>
+          <div class="relative">
+            <i class="fa-solid fa-user absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+            <input type="text" id="usernameInput" required placeholder="Enter username" value="admin"
+                   class="w-full pl-9 pr-3 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-600 focus:bg-white outline-none" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Password</label>
+          <div class="relative">
+            <i class="fa-solid fa-lock absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+            <input type="password" id="passwordInput" required placeholder="Enter password" value="school123"
+                   class="w-full pl-9 pr-3 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-600 focus:bg-white outline-none" />
+          </div>
+        </div>
+
+        <button type="submit" class="w-full bg-indigo-950 hover:bg-indigo-900 text-white font-bold py-3 rounded-xl transition shadow text-sm mt-2">
+          Login
+        </button>
+      </form>
+
+    </div>
+  </div>
+
+  <!-- ================= 2. DASHBOARD SCREEN ================= -->
+  <div id="dashboardScreen" class="hidden flex-1 flex-col">
+    
+    <!-- Top Header -->
+    <header class="bg-indigo-950 text-white shadow sticky top-0 z-40">
+      <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+        <div class="flex items-center space-x-3">
+          <div class="w-9 h-9 rounded-full bg-amber-400 text-indigo-950 flex items-center justify-center font-bold text-lg shadow">
+            <i class="fa-solid fa-graduation-cap"></i>
+          </div>
+          <div>
+            <h1 class="school-title text-base sm:text-lg font-bold tracking-wide">K.V.R. HIGH SCHOOL</h1>
+            <p id="cloudSyncStatus" class="text-[10px] text-emerald-400 flex items-center gap-1 font-semibold">
+              <i class="fa-solid fa-cloud-arrow-up text-[9px]"></i> Cloud Synced (Supabase)
+            </p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 sm:gap-3">
+          <button onclick="refreshDataFromCloud()" title="Reload from Cloud" class="bg-indigo-900/80 hover:bg-indigo-800 text-indigo-200 border border-indigo-700/50 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1">
+            <i class="fa-solid fa-rotate"></i>
+            <span class="hidden sm:inline">Refresh</span>
+          </button>
+          <button onclick="clearAllSchoolData()" title="Reset All Data" class="bg-rose-900/60 hover:bg-rose-800 text-rose-200 border border-rose-700/50 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1">
+            <i class="fa-solid fa-trash-arrow-up"></i>
+            <span class="hidden sm:inline">Reset</span>
+          </button>
+          <a href="https://wa.me/919052682774" target="_blank" class="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition">
+            <i class="fa-brands fa-whatsapp"></i>
+            <span class="hidden sm:inline">+91 9052682774</span>
+          </a>
+          <button onclick="handleLogout()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-semibold transition">
+            <i class="fa-solid fa-right-from-bracket mr-1"></i> Logout
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Section -->
+    <main class="max-w-7xl mx-auto w-full px-4 py-6 flex-1">
+      
+      <!-- CONTROLS CONTAINER -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 mb-6 space-y-4">
+        
+        <!-- ROW 1: PRIMARY / HIGH SCHOOL SWITCH + UPLOAD -->
+        <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-400 mr-1">Section:</span>
+            
+            <button id="btnSectionPrimary" onclick="switchSection('primary')" 
+                    class="flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition shadow-sm bg-slate-100 hover:bg-slate-200 text-slate-700">
+              <i class="fa-solid fa-shapes"></i>
+              <span>Primary (Nursery - 5th)</span>
+            </button>
+
+            <button id="btnSectionHigh" onclick="switchSection('high')" 
+                    class="flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition shadow-sm bg-indigo-950 text-white">
+              <i class="fa-solid fa-book-open-reader"></i>
+              <span>High School (6th - 10th)</span>
+            </button>
+          </div>
+
+          <!-- DIRECT FILE UPLOAD -->
+          <div>
+            <input type="file" id="universalFileInput" accept=".xlsx, .xls, .csv" class="hidden" onchange="processExactMatchUpload(event)" />
+            <button onclick="document.getElementById('universalFileInput').click()" class="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition shadow-md">
+              <i class="fa-solid fa-file-excel text-base"></i> Upload Marks File
+            </button>
+          </div>
+        </div>
+
+        <!-- ROW 2: DEDICATED BULK MAX MARKS BUTTONS -->
+        <div class="flex flex-wrap items-center justify-between gap-3 bg-indigo-50/70 p-3 rounded-2xl border border-indigo-100">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-black text-indigo-950 uppercase tracking-wider flex items-center gap-1.5">
+              <i class="fa-solid fa-sliders text-indigo-600"></i> Set Max Marks:
+            </span>
+            <span class="text-xs text-slate-500 hidden sm:inline">(50, 35, 25, 20 or Custom)</span>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2">
+            <button onclick="promptBulkMaxMarks('primary')" class="flex items-center gap-1.5 bg-white hover:bg-indigo-900 hover:text-white text-indigo-950 border border-indigo-200 px-3.5 py-2 rounded-xl text-xs font-bold transition shadow-sm">
+              <i class="fa-solid fa-shapes text-amber-500"></i>
+              <span>All Primary Max Marks</span>
+            </button>
+
+            <button onclick="promptBulkMaxMarks('high')" class="flex items-center gap-1.5 bg-white hover:bg-indigo-900 hover:text-white text-indigo-950 border border-indigo-200 px-3.5 py-2 rounded-xl text-xs font-bold transition shadow-sm">
+              <i class="fa-solid fa-book-open-reader text-indigo-600"></i>
+              <span>All High School Max Marks</span>
+            </button>
+
+            <button onclick="promptBulkMaxMarks('current')" class="flex items-center gap-1.5 bg-indigo-950 hover:bg-indigo-900 text-white px-3 py-2 rounded-xl text-xs font-bold transition shadow-sm">
+              <i class="fa-solid fa-pen-ruler text-amber-400"></i>
+              <span>This Class Max Marks</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- ROW 3: CLASS TABS WITH EXACT COUNTS -->
+        <div class="overflow-x-auto no-scrollbar py-1">
+          <div class="flex items-center space-x-2" id="classTabsContainer"></div>
+        </div>
+
+        <!-- ROW 4: VIEW TABS + SEARCH BAR -->
+        <div class="pt-3 border-t border-slate-100 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          
+          <div class="flex flex-wrap items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
+            <button id="btnTabEntry" onclick="switchClassViewMode('entry')" 
+                    class="flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition text-slate-600 hover:text-slate-900">
+              <i class="fa-solid fa-file-pen text-indigo-700"></i>
+              <span>Marks Entry</span>
+            </button>
+
+            <button id="btnTabShare" onclick="switchClassViewMode('share')" 
+                    class="flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition bg-white text-indigo-950 shadow-sm">
+              <i class="fa-brands fa-whatsapp text-emerald-600 text-sm"></i>
+              <span>View Marks & Share WhatsApp</span>
+            </button>
+
+            <button id="btnTabPhones" onclick="switchClassViewMode('phones')" 
+                    class="flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition text-slate-600 hover:text-slate-900">
+              <i class="fa-solid fa-address-book text-amber-600"></i>
+              <span>Student Phone Number</span>
+            </button>
+          </div>
+
+          <!-- Search Bar -->
+          <div class="relative min-w-[260px]">
+            <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+            <input type="text" id="searchInput" oninput="handleSearch()" 
+                   placeholder="Search student name, S.No, or phone..." 
+                   class="w-full pl-9 pr-4 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-600 outline-none" />
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- Current Class Status Header -->
+      <div class="flex items-center justify-between mb-4 px-1">
+        <h3 id="currentClassHeading" class="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2"></h3>
+        <span class="text-xs font-semibold text-slate-600 bg-slate-200 px-3 py-1 rounded-full" id="resultCountBadge">
+          Showing 0 Students
+        </span>
+      </div>
+
+      <!-- VIEW 1: MARKS ENTRY GRID -->
+      <div id="entryViewContainer" class="hidden grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+
+      <!-- VIEW 2: VIEW MARKS & SHARE WHATSAPP -->
+      <div id="shareViewContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+
+      <!-- VIEW 3: STUDENT PHONE DIRECTORY -->
+      <div id="phoneViewContainer" class="hidden bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3 bg-slate-50">
+          <div>
+            <h4 class="text-sm font-bold text-slate-900">Student Phone Directory</h4>
+            <p class="text-xs text-slate-500">Every student displayed with S.No, real name, and WhatsApp number</p>
+          </div>
+          <button onclick="promptAddNewStudentPhone()" class="bg-indigo-950 hover:bg-indigo-900 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 shadow">
+            <i class="fa-solid fa-user-plus"></i> Add Student Phone
+          </button>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-xs text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                <th class="p-3">S.No</th>
+                <th class="p-3">Student Name</th>
+                <th class="p-3">Class</th>
+                <th class="p-3">Parent WhatsApp Number</th>
+                <th class="p-3 text-center">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="phoneTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- Floating School WhatsApp Button -->
+    <a href="https://wa.me/919052682774" target="_blank" title="School WhatsApp" class="fixed bottom-6 right-6 bg-emerald-500 hover:bg-emerald-600 text-white w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition duration-200 z-50 text-2xl">
+      <i class="fa-brands fa-whatsapp"></i>
+    </a>
+
+  </div>
+
+  <!-- ================= 3. MARKS MEMO MODAL ================= -->
+  <div id="memoModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 hidden overflow-y-auto p-4 flex justify-center items-center">
+    <div class="bg-white rounded-3xl max-w-xl w-full p-4 sm:p-6 shadow-2xl relative my-6">
+      
+      <button onclick="closeMemoModal()" class="no-print absolute right-4 top-4 text-slate-400 hover:text-slate-600 text-xl">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+
+      <div id="printableMarksMemo" class="border-2 border-indigo-950 p-6 rounded-2xl bg-white text-slate-900">
+        
+        <div class="text-center border-b-2 border-indigo-900 pb-3 mb-4">
+          <h2 class="school-title text-xl sm:text-2xl font-black text-indigo-950 tracking-wider">K.V.R. HIGH SCHOOL</h2>
+          <p class="text-[11px] uppercase tracking-wider text-slate-600 font-semibold">Recognized by Govt. of Andhra Pradesh</p>
+          <div class="mt-2 inline-block bg-indigo-950 text-white font-bold text-[10px] uppercase px-3 py-0.5 rounded-full tracking-wider">
+            Official Marks Memo & Progress Sheet
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 text-xs mb-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+          <div><span class="font-bold text-slate-500">Student Name:</span> <strong id="memoName" class="text-slate-900 uppercase"></strong></div>
+          <div><span class="font-bold text-slate-500">S.No / Roll:</span> <strong id="memoRoll" class="text-slate-900"></strong></div>
+          <div><span class="font-bold text-slate-500">Class:</span> <strong id="memoClass" class="text-slate-900"></strong></div>
+          <div><span class="font-bold text-slate-500">Parent WhatsApp:</span> <strong id="memoPhone" class="text-slate-900"></strong></div>
+        </div>
+
+        <table class="w-full text-xs text-left border-collapse border border-slate-300 mb-3">
+          <thead>
+            <tr class="bg-indigo-950 text-white">
+              <th class="p-2 border border-slate-300">Subject</th>
+              <th class="p-2 border border-slate-300 text-center">Max Marks</th>
+              <th class="p-2 border border-slate-300 text-center">Marks Secured</th>
+              <th class="p-2 border border-slate-300 text-center">Grade</th>
+            </tr>
+          </thead>
+          <tbody id="memoSubjectRows"></tbody>
+          <tfoot>
+            <tr class="font-bold bg-slate-100">
+              <td class="p-2 border border-slate-300">Grand Total</td>
+              <td class="p-2 border border-slate-300 text-center" id="memoMaxTotal">600</td>
+              <td class="p-2 border border-slate-300 text-center text-indigo-950 font-black" id="memoObtainedTotal">0</td>
+              <td class="p-2 border border-slate-300 text-center text-emerald-700 font-black" id="memoOverallGrade">A+</td>
+            </tr>
+          </tfoot>
+        </table>
+
+        <div class="grid grid-cols-2 gap-4 text-xs pt-2 border-t border-slate-200 items-end">
+          <div>
+            <p><span class="font-bold">Status:</span> <strong id="memoStatus" class="text-emerald-700">PASSED</strong></p>
+            <p><span class="font-bold">Percentage:</span> <strong id="memoPercentage" class="text-indigo-900 font-bold">0%</strong></p>
+          </div>
+          <div class="text-right">
+            <span class="text-[9px] text-slate-400 block mb-3">Authorized Stamp</span>
+            <div class="inline-block border-t border-slate-800 pt-1 text-center font-bold text-[11px] text-slate-800 min-w-[120px]">
+              Principal / Headmaster
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="no-print mt-4 flex flex-wrap gap-2 justify-end">
+        <button onclick="window.print()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold px-3 py-2 rounded-xl transition flex items-center gap-1.5">
+          <i class="fa-solid fa-print"></i> Print
+        </button>
+        <button id="memoDirectWhatsAppBtn" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2 rounded-xl transition flex items-center gap-1.5 shadow">
+          <i class="fa-brands fa-whatsapp text-sm"></i> Direct WhatsApp to Student Phone
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ================= 4. JAVASCRIPT ENGINE ================= -->
+  <script>
+    // ================= SUPABASE CONFIGURATION =================
+    const SUPABASE_URL = "https://gxniyppqnopqbxcrdqti.supabase.co/rest/v1/";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd4bml5cHBxbm9wcWJ4Y3JkcXRpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI4MzA3NzMsImV4cCI6MjEwODQwNjc3M30.VoiRTz-SmdIYeIVw4E1NeMd0QbmsXVJ6QYews4iemCs";
+
+    const supabaseClient = (window.supabase && SUPABASE_URL.indexOf("YOUR_") === -1)
+      ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+      : null;
+
+    const DEFAULT_WHATSAPP = "9052682774";
+    const DB_STORAGE_KEY = "kvr_students_database";
+
+    const PRIMARY_CLASSES = ["Nursery", "LKG", "UKG", "Class 1", "Class 2", "Class 3", "Class 4", "Class 5"];
+    const HIGH_SCHOOL_CLASSES = ["Class 6", "Class 7", "Class 8", "Class 9", "Class 10"];
+    const ALL_CLASSES = [...PRIMARY_CLASSES, ...HIGH_SCHOOL_CLASSES];
+
+    let currentSection = "high";
+    let currentSelectedClass = "Class 6";
+    let currentClassViewMode = "share";
+
+    let studentsDatabase = loadLocalFallback();
+
+    function setSyncStatus(msg, isSuccess = true) {
+      const el = document.getElementById("cloudSyncStatus");
+      if (!el) return;
+      el.innerHTML = isSuccess 
+        ? `<i class="fa-solid fa-cloud-arrow-up text-[9px]"></i> ${msg}`
+        : `<i class="fa-solid fa-triangle-exclamation text-amber-400 text-[9px]"></i> ${msg}`;
+      el.className = isSuccess 
+        ? "text-[10px] text-emerald-400 flex items-center gap-1 font-semibold"
+        : "text-[10px] text-amber-300 flex items-center gap-1 font-semibold";
+    }
+
+    function loadLocalFallback() {
+      try {
+        const raw = localStorage.getItem(DB_STORAGE_KEY);
+        return raw ? JSON.parse(raw) : [];
+      } catch (err) {
+        return [];
+      }
+    }
+
+    function saveLocalFallback() {
+      try {
+        localStorage.setItem(DB_STORAGE_KEY, JSON.stringify(studentsDatabase));
+      } catch (err) {}
+    }
+
+    // ================= SUPABASE CLOUD SYNC FUNCTIONS =================
+    async function loadDataFromSupabase() {
+      if (!supabaseClient) {
+        setSyncStatus("Local Only (Supabase keys not configured)", false);
+        return;
+      }
+
+      setSyncStatus("Syncing with Supabase...", true);
+      try {
+        const { data, error } = await supabaseClient
+          .from('school_students')
+          .select('*')
+          .order('sno', { ascending: true });
+
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          studentsDatabase = data;
+          saveLocalFallback();
+          setSyncStatus("Cloud Synced (Supabase)", true);
+        } else {
+          setSyncStatus("Cloud Empty (Ready for upload)", true);
+        }
+      } catch (err) {
+        console.warn("Supabase load error:", err.message);
+        setSyncStatus("Offline / Local Storage Mode", false);
+      }
+
+      renderClassTabs();
+      updateClassHeader();
+      renderCurrentView();
+    }
+
+    async function syncEntireDatabaseToCloud() {
+      saveLocalFallback();
+      if (!supabaseClient) return;
+
+      setSyncStatus("Saving to Supabase...", true);
+      try {
+        const payload = studentsDatabase.map(s => ({
+          id: String(s.id),
+          class: s.class,
+          sno: String(s.sno),
+          roll: String(s.roll || s.sno),
+          name: s.name,
+          phone: String(s.phone),
+          subjects: s.subjects
+        }));
+
+        const { error } = await supabaseClient
+          .from('school_students')
+          .upsert(payload, { onConflict: 'id' });
+
+        if (error) throw error;
+        setSyncStatus("Cloud Synced (Supabase)", true);
+      } catch (err) {
+        console.error("Cloud sync failed:", err.message);
+        setSyncStatus("Cloud Sync Failed (Saved Locally)", false);
+      }
+    }
+
+    async function syncSingleStudentToCloud(student) {
+      saveLocalFallback();
+      if (!supabaseClient) return;
+
+      try {
+        await supabaseClient
+          .from('school_students')
+          .upsert({
+            id: String(student.id),
+            class: student.class,
+            sno: String(student.sno),
+            roll: String(student.roll || student.sno),
+            name: student.name,
+            phone: String(student.phone),
+            subjects: student.subjects
+          }, { onConflict: 'id' });
+      } catch (err) {
+        console.error("Supabase single student save error:", err);
+      }
+    }
+
+    async function deleteStudentFromCloud(studentId) {
+      saveLocalFallback();
+      if (!supabaseClient) return;
+
+      try {
+        await supabaseClient
+          .from('school_students')
+          .delete()
+          .eq('id', String(studentId));
+      } catch (err) {
+        console.error("Supabase delete student error:", err);
+      }
+    }
+
+    function refreshDataFromCloud() {
+      loadDataFromSupabase();
+    }
+
+    // ================= APP LIFECYCLE =================
+    window.addEventListener("DOMContentLoaded", () => {
+      const isLoggedIn = sessionStorage.getItem("kvr_logged_in") === "true";
+      if (isLoggedIn) {
+        document.getElementById("loginScreen").classList.add("hidden");
+        document.getElementById("dashboardScreen").classList.remove("hidden");
+        switchSection("high");
+        loadDataFromSupabase();
+      }
+    });
+
+    function handleLogin(e) {
+      e.preventDefault();
+      const u = document.getElementById("usernameInput").value.trim();
+      const p = document.getElementById("passwordInput").value.trim();
+
+      if (u === "admin" && p === "school123") {
+        sessionStorage.setItem("kvr_logged_in", "true");
+        document.getElementById("loginScreen").classList.add("hidden");
+        document.getElementById("dashboardScreen").classList.remove("hidden");
+        switchSection("high");
+        loadDataFromSupabase();
+      } else {
+        alert("Incorrect Username or Password! (Use: admin / school123)");
+      }
+    }
+
+    function handleLogout() {
+      sessionStorage.removeItem("kvr_logged_in");
+      document.getElementById("dashboardScreen").classList.add("hidden");
+      document.getElementById("loginScreen").classList.remove("hidden");
+    }
+
+    async function clearAllSchoolData() {
+      if (confirm("Are you sure you want to completely erase all data from both Browser and Supabase Cloud?")) {
+        studentsDatabase = [];
+        saveLocalFallback();
+
+        if (supabaseClient) {
+          try {
+            await supabaseClient.from('school_students').delete().neq('id', '0');
+          } catch (e) {}
+        }
+
+        renderClassTabs();
+        updateClassHeader();
+        renderCurrentView();
+        alert("All student data cleared.");
+      }
+    }
+
+    function switchSection(section) {
+      currentSection = section;
+
+      const btnPrimary = document.getElementById("btnSectionPrimary");
+      const btnHigh = document.getElementById("btnSectionHigh");
+
+      if (section === "primary") {
+        btnPrimary.className = "flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition shadow-sm bg-indigo-950 text-white";
+        btnHigh.className = "flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition shadow-sm bg-slate-100 hover:bg-slate-200 text-slate-700";
+        if (!PRIMARY_CLASSES.includes(currentSelectedClass)) {
+          currentSelectedClass = PRIMARY_CLASSES[0];
+        }
+      } else {
+        btnHigh.className = "flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition shadow-sm bg-indigo-950 text-white";
+        btnPrimary.className = "flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition shadow-sm bg-slate-100 hover:bg-slate-200 text-slate-700";
+        if (!HIGH_SCHOOL_CLASSES.includes(currentSelectedClass)) {
+          currentSelectedClass = "Class 6";
+        }
+      }
+
+      renderClassTabs();
+      updateClassHeader();
+      renderCurrentView();
+    }
+
+    function switchClassViewMode(mode) {
+      currentClassViewMode = mode;
+
+      const btnEntry = document.getElementById("btnTabEntry");
+      const btnShare = document.getElementById("btnTabShare");
+      const btnPhones = document.getElementById("btnTabPhones");
+
+      const entryContainer = document.getElementById("entryViewContainer");
+      const shareContainer = document.getElementById("shareViewContainer");
+      const phoneContainer = document.getElementById("phoneViewContainer");
+
+      btnEntry.className = "flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition text-slate-600 hover:text-slate-900";
+      btnShare.className = "flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition text-slate-600 hover:text-slate-900";
+      btnPhones.className = "flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition text-slate-600 hover:text-slate-900";
+
+      entryContainer.classList.add("hidden");
+      shareContainer.classList.add("hidden");
+      phoneContainer.classList.add("hidden");
+
+      if (mode === "entry") {
+        btnEntry.className = "flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition bg-white text-indigo-950 shadow-sm";
+        entryContainer.classList.remove("hidden");
+      } else if (mode === "share") {
+        btnShare.className = "flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition bg-white text-indigo-950 shadow-sm";
+        shareContainer.classList.remove("hidden");
+      } else {
+        btnPhones.className = "flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition bg-white text-indigo-950 shadow-sm";
+        phoneContainer.classList.remove("hidden");
+      }
+
+      updateClassHeader();
+      renderCurrentView();
+    }
+
+    function renderClassTabs() {
+      const container = document.getElementById("classTabsContainer");
+      const activeList = currentSection === "primary" ? PRIMARY_CLASSES : HIGH_SCHOOL_CLASSES;
+
+      container.innerHTML = activeList.map(cls => {
+        const isActive = cls === currentSelectedClass;
+        const count = studentsDatabase.filter(s => s.class === cls).length;
+        return `
+          <button onclick="selectClass('${cls}')" 
+                  class="px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition flex-shrink-0 flex items-center gap-1.5 ${
+                    isActive 
+                      ? 'bg-indigo-600 text-white shadow' 
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                  }">
+            <span>${cls}</span>
+            <span class="${count > 0 ? 'bg-emerald-500' : 'bg-slate-400'} text-white text-[10px] px-2 py-0.5 rounded-full font-bold">${count}</span>
+          </button>
+        `;
+      }).join('');
+    }
+
+    function selectClass(className) {
+      currentSelectedClass = className;
+      updateClassHeader();
+      renderClassTabs();
+      renderCurrentView();
+    }
+
+    function updateClassHeader() {
+      let modeText = "View Marks & Share WhatsApp";
+      if (currentClassViewMode === "entry") modeText = "Marks Entry";
+      if (currentClassViewMode === "phones") modeText = "Student Phone Numbers";
+
+      const count = studentsDatabase.filter(s => s.class === currentSelectedClass).length;
+
+      document.getElementById("currentClassHeading").innerHTML = `
+        <span class="w-3 h-3 rounded-full bg-emerald-500"></span> ${currentSelectedClass} 
+        <span class="text-xs font-normal text-slate-500">/ ${modeText}</span>
+      `;
+
+      document.getElementById("resultCountBadge").innerText = `Exact Count: ${count} Students`;
+    }
+
+    function renderCurrentView(filterText = "") {
+      if (currentClassViewMode === "entry") {
+        renderEntryGrid(filterText);
+      } else if (currentClassViewMode === "share") {
+        renderShareMarksGrid(filterText);
+      } else {
+        renderPhoneDirectory(filterText);
+      }
+    }
+
+    function handleSearch() {
+      renderCurrentView(document.getElementById("searchInput").value);
+    }
+
+    async function promptBulkMaxMarks(scope) {
+      let label = "";
+      let targetClasses = [];
+
+      if (scope === "primary") {
+        label = "ALL Primary Classes (Nursery to Class 5)";
+        targetClasses = PRIMARY_CLASSES;
+      } else if (scope === "high") {
+        label = "ALL High School Classes (Class 6 to Class 10)";
+        targetClasses = HIGH_SCHOOL_CLASSES;
+      } else {
+        label = `Current Class (${currentSelectedClass})`;
+        targetClasses = [currentSelectedClass];
+      }
+
+      const input = prompt(`Enter new Max Marks for ${label} (e.g. 50, 35, 25, 20, 100):`, "50");
+      if (!input) return;
+
+      const newMax = Number(input);
+      if (isNaN(newMax) || newMax <= 0) {
+        alert("Please enter a valid positive number for Max Marks.");
+        return;
+      }
+
+      let studentsAffected = 0;
+      studentsDatabase.forEach(student => {
+        if (targetClasses.includes(student.class)) {
+          student.subjects.forEach(sub => {
+            sub.max = newMax;
+          });
+          studentsAffected++;
+        }
+      });
+
+      renderCurrentView();
+      await syncEntireDatabaseToCloud();
+      alert(`Success! Max marks set to ${newMax} for ${label}.\nTotal ${studentsAffected} student scorecards updated.`);
+    }
+
+    async function deleteStudent(studentId) {
+      const student = studentsDatabase.find(s => String(s.id) === String(studentId));
+      if (!student) return;
+
+      const confirmDelete = confirm(`Are you sure you want to delete ${student.name} (S.No: ${student.sno}) from ${student.class}?`);
+      if (confirmDelete) {
+        studentsDatabase = studentsDatabase.filter(s => String(s.id) !== String(studentId));
+        await deleteStudentFromCloud(studentId);
+        renderClassTabs();
+        updateClassHeader();
+        renderCurrentView();
+        alert(`Student "${student.name}" deleted successfully.`);
+      }
+    }
+
+    function identifyClassFromText(text) {
+      if (!text) return "";
+      const raw = String(text).trim();
+      if (!raw) return "";
+
+      const u = raw.toUpperCase().replace(/\s+/g, ' ');
+
+      if (/^SECTION\s*[1-9]$/i.test(u) || /^SEC\s*[1-9]$/i.test(u) || /^PAPER\s*[1-9]$/i.test(u)) return "";
+
+      if (/\b(10|10TH|TENTH|SSC)\b/i.test(u) || /CLASS[\s\-_]*10\b/i.test(u) || /CLASS[\s\-_]*X\b/i.test(u) || u === "10" || u === "X" || u === "10TH") return "Class 10";
+      if (/\b(9|9TH|NINTH)\b/i.test(u) || /CLASS[\s\-_]*9\b/i.test(u) || /CLASS[\s\-_]*IX\b/i.test(u) || u === "9" || u === "IX" || u === "9TH") return "Class 9";
+      if (/\b(8|8TH|EIGHTH)\b/i.test(u) || /CLASS[\s\-_]*8\b/i.test(u) || /CLASS[\s\-_]*VIII\b/i.test(u) || u === "8" || u === "VIII" || u === "8TH") return "Class 8";
+      if (/\b(7|7TH|SEVENTH)\b/i.test(u) || /CLASS[\s\-_]*7\b/i.test(u) || /CLASS[\s\-_]*VII\b/i.test(u) || u === "7" || u === "VII" || u === "7TH") return "Class 7";
+      if (/\b(6|6TH|SIXTH)\b/i.test(u) || /CLASS[\s\-_]*6\b/i.test(u) || /CLASS[\s\-_]*VI\b/i.test(u) || u === "6" || u === "VI" || u === "6TH") return "Class 6";
+
+      if (/CLASS[\s\-_]*5\b/i.test(u) || u === "5TH" || u === "CLASS 5") return "Class 5";
+      if (/CLASS[\s\-_]*4\b/i.test(u) || u === "4TH" || u === "CLASS 4") return "Class 4";
+      if (/CLASS[\s\-_]*3\b/i.test(u) || u === "3RD" || u === "CLASS 3") return "Class 3";
+      if (/CLASS[\s\-_]*2\b/i.test(u) || u === "CLASS 2" || u === "2ND CLASS") return "Class 2";
+      if (/CLASS[\s\-_]*1\b/i.test(u) || u === "CLASS 1" || u === "1ST CLASS") return "Class 1";
+
+      if (u.includes("UKG")) return "UKG";
+      if (u.includes("LKG")) return "LKG";
+      if (u.includes("NUR")) return "Nursery";
+
+      return "";
+    }
+
+    function isSummaryOrFooterRow(text) {
+      if (!text) return true;
+      const str = String(text).trim().toLowerCase();
+      if (str === "" || str === "null" || str === "undefined") return true;
+
+      const blockedPhrases = [
+        "total no. of students", "total no of students", "total students", "no. of students",
+        "no. of present", "no of present", "total present", "present",
+        "no. of absent", "no of absent", "total absent", "absent",
+        "no. of passed", "no of passed", "total passed", "passed",
+        "no. of failed", "no of failed", "total failed", "failed",
+        "class teacher", "teacher", "head master", "headmaster", "principal", "hm",
+        "signature", "sign", "verified by", "checked by", "incharge",
+        "grand total", "total", "average", "maximum", "minimum", "remarks", "percentage",
+        "date", "school stamp", "seal"
+      ];
+
+      for (const phrase of blockedPhrases) {
+        if (str === phrase || str.includes(phrase)) return true;
+      }
+
+      if (!/[a-zA-Z\u0C00-\u0C7F]/.test(str)) return true;
+
+      return false;
+    }
+
+    function processExactMatchUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = async function(e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+
+          const newDatabase = [];
+          const classCounts = {};
+
+          workbook.SheetNames.forEach(sheetName => {
+            const worksheet = workbook.Sheets[sheetName];
+            const rawRows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
+            if (!rawRows || rawRows.length < 2) return;
+
+            const sheetClass = identifyClassFromText(sheetName);
+
+            let headerIdx = -1;
+            for (let r = 0; r < Math.min(rawRows.length, 12); r++) {
+              const row = rawRows[r].map(c => String(c).trim());
+              const nonNumericCount = row.filter(c => c !== "" && isNaN(Number(c))).length;
+              if (nonNumericCount >= 2) {
+                headerIdx = r;
+                break;
+              }
+            }
+            if (headerIdx === -1) headerIdx = 0;
+
+            const headers = rawRows[headerIdx].map(h => String(h).trim());
+
+            let snoCol = -1;
+            let nameCol = -1;
+            let classCol = -1;
+            let phoneCol = -1;
+
+            headers.forEach((h, idx) => {
+              const clean = h.toUpperCase().replace(/[^A-Z0-9]/g, '');
+              if (snoCol === -1 && (clean === "SNO" || clean === "SLNO" || clean === "SINO" || clean === "SERIALNO" || clean.startsWith("SNO") || clean.startsWith("SLNO") || clean === "SI" || clean === "SN")) {
+                snoCol = idx;
+              } else if (nameCol === -1 && (clean.includes("NAME") || clean.includes("STUDENT") || clean.includes("CANDIDATE"))) {
+                nameCol = idx;
+              } else if (classCol === -1 && (clean === "CLASS" || clean === "STANDARD" || clean === "STD" || clean === "CLASSNAME")) {
+                classCol = idx;
+              } else if (phoneCol === -1 && (clean.includes("PHONE") || clean.includes("MOBILE") || clean.includes("WHATSAPP") || clean.includes("CELL"))) {
+                phoneCol = idx;
+              }
+            });
+
+            if (snoCol === -1) {
+              let isFirstColSno = true;
+              let checked = 0;
+              for (let r = headerIdx + 1; r < Math.min(rawRows.length, headerIdx + 6); r++) {
+                const val = Number(rawRows[r][0]);
+                if (!isNaN(val) && val > 0) {
+                  checked++;
+                } else {
+                  isFirstColSno = false;
+                  break;
+                }
+              }
+              if (isFirstColSno && checked >= 1) snoCol = 0;
+            }
+
+            if (nameCol === -1) {
+              for (let c = 0; c < headers.length; c++) {
+                if (c !== snoCol && c !== classCol && c !== phoneCol) {
+                  let textCount = 0;
+                  for (let r = headerIdx + 1; r < Math.min(rawRows.length, headerIdx + 6); r++) {
+                    const val = String(rawRows[r][c] || "").trim();
+                    if (val && !isSummaryOrFooterRow(val)) textCount++;
+                  }
+                  if (textCount >= 1) {
+                    nameCol = c;
+                    break;
+                  }
+                }
+              }
+            }
+
+            const subjectIndices = [];
+            const nonSubjectKeywords = ["TOTAL", "GRAND", "PERCENTAGE", "PERCENT", "PER", "GRADE", "RESULT", "RANK", "SEC", "SECTION", "PASSED", "FAILED"];
+
+            headers.forEach((h, idx) => {
+              if (idx !== snoCol && idx !== nameCol && idx !== classCol && idx !== phoneCol && h) {
+                const upperH = h.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                const isExcluded = nonSubjectKeywords.some(k => upperH.includes(k));
+                if (!isExcluded) {
+                  let detectedMax = 100;
+                  const maxInHeader = h.match(/[\(\[\/\-]\s*(\d{2,3})\s*[\)\]]?$/);
+                  if (maxInHeader) detectedMax = Number(maxInHeader[1]);
+                  subjectIndices.push({ idx: idx, name: h, defaultMax: detectedMax });
+                }
+              }
+            });
+
+            for (let r = headerIdx + 1; r < rawRows.length; r++) {
+              const row = rawRows[r];
+              if (!row || row.length === 0) continue;
+
+              let studentName = nameCol !== -1 ? String(row[nameCol]).trim() : "";
+              if (!studentName || isSummaryOrFooterRow(studentName)) continue;
+
+              let serialNo = snoCol !== -1 ? String(row[snoCol]).trim() : "";
+              if (!serialNo || isNaN(Number(serialNo))) {
+                if (isSummaryOrFooterRow(serialNo)) continue;
+                serialNo = String(r - headerIdx);
+              }
+
+              let studentClass = "";
+              if (sheetClass) {
+                studentClass = sheetClass;
+              } else if (classCol !== -1 && row[classCol]) {
+                studentClass = identifyClassFromText(row[classCol]);
+              }
+
+              if (!studentClass) studentClass = currentSelectedClass;
+
+              const subjects = [];
+              subjectIndices.forEach(item => {
+                const val = row[item.idx];
+                if (val !== undefined && String(val).trim() !== "") {
+                  subjects.push({
+                    name: item.name,
+                    max: item.defaultMax || 50,
+                    marks: Number(val) || 0
+                  });
+                }
+              });
+
+              if (subjects.length === 0) continue;
+
+              let phone = DEFAULT_WHATSAPP;
+              if (phoneCol !== -1 && row[phoneCol]) {
+                const cleanP = String(row[phoneCol]).replace(/[^0-9]/g, '').slice(-10);
+                if (cleanP.length >= 10) phone = cleanP;
+              }
+
+              newDatabase.push({
+                id: String(Date.now() + Math.random()),
+                class: studentClass,
+                sno: serialNo,
+                roll: serialNo,
+                name: studentName,
+                phone: phone,
+                subjects: subjects
+              });
+
+              classCounts[studentClass] = (classCounts[studentClass] || 0) + 1;
+            }
+          });
+
+          event.target.value = "";
+
+          if (newDatabase.length === 0) {
+            alert("No student records found with valid names. Please check your Excel file.");
+            return;
+          }
+
+          studentsDatabase = newDatabase;
+          await syncEntireDatabaseToCloud();
+
+          const uploadedClasses = Object.keys(classCounts).sort();
+          const firstClass = uploadedClasses.find(c => HIGH_SCHOOL_CLASSES.includes(c)) || uploadedClasses[0];
+
+          if (PRIMARY_CLASSES.includes(firstClass)) {
+            currentSection = "primary";
+          } else {
+            currentSection = "high";
+          }
+          currentSelectedClass = firstClass;
+
+          renderClassTabs();
+          updateClassHeader();
+          renderCurrentView();
+
+          const summaryLines = uploadedClasses
+            .map(cls => `• ${cls}: ${classCounts[cls]} students`)
+            .join("\n");
+
+          setTimeout(() => {
+            alert(`Upload Complete & Synced to Cloud!\n\n${summaryLines}\n\nTotal Students Uploaded: ${newDatabase.length}`);
+          }, 100);
+
+        } catch (err) {
+          console.error(err);
+          alert("Error parsing Excel file. Please upload a valid .xlsx or .xls file.");
+        }
+      };
+
+      reader.readAsArrayBuffer(file);
+    }
+
+    function renderEntryGrid(filterText = "") {
+      const grid = document.getElementById("entryViewContainer");
+      let list = getFilteredStudents(filterText);
+
+      document.getElementById("resultCountBadge").innerText = `Exact Count: ${list.length} Students`;
+
+      if (list.length === 0) {
+        grid.innerHTML = getEmptyStateHTML("No records found for " + currentSelectedClass);
+        return;
+      }
+
+      grid.innerHTML = list.map(student => {
+        const maxMarks = student.subjects.reduce((a, b) => a + Number(b.max || 0), 0) || 100;
+        const gotMarks = Number((student.subjects.reduce((a, b) => a + Number(b.marks || 0), 0)).toFixed(2));
+
+        return `
+          <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 flex flex-col justify-between">
+            <div>
+              <div class="flex justify-between items-start mb-2">
+                <div>
+                  <span class="text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded bg-indigo-50 text-indigo-700">
+                    S.No: ${student.sno}
+                  </span>
+                  <h4 class="text-base font-bold text-slate-900 mt-1">${student.name}</h4>
+                  <p class="text-xs text-slate-500 font-medium">Class: ${student.class}</p>
+                </div>
+                
+                <div class="flex items-center gap-2">
+                  <div class="text-right">
+                    <div class="text-base font-black text-indigo-900">${gotMarks} / ${maxMarks}</div>
+                    <span class="text-[10px] font-bold px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded">MARKS</span>
+                  </div>
+                  <button onclick="deleteStudent('${student.id}')" title="Delete Student" class="w-7 h-7 flex items-center justify-center rounded-lg bg-rose-50 hover:bg-rose-600 text-rose-600 hover:text-white transition">
+                    <i class="fa-solid fa-trash-can text-xs"></i>
+                  </button>
+                </div>
+              </div>
+
+              <div class="bg-slate-50 rounded-xl p-3 border border-slate-100 my-2 text-xs space-y-1.5">
+                ${student.subjects.map((sub, sIdx) => `
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-slate-600 truncate max-w-[130px]" title="${sub.name}">${sub.name}:</span>
+                    <div class="flex items-center gap-1">
+                      <input type="number" step="any" min="0" max="${sub.max}" value="${sub.marks}" 
+                             title="Marks Secured"
+                             onchange="updateSingleSubjectMark('${student.id}', ${sIdx}, this.value)"
+                             class="w-12 text-center font-bold bg-white border border-slate-300 rounded px-1 py-0.5 text-xs focus:ring-1 focus:ring-indigo-600 outline-none" />
+                      <span class="text-slate-400">/</span>
+                      <input type="number" min="1" value="${sub.max}" 
+                             title="Max Marks"
+                             onchange="updateSingleSubjectMaxMarks('${student.id}', ${sIdx}, this.value)"
+                             class="w-12 text-center font-bold bg-indigo-50 text-indigo-900 border border-indigo-200 rounded px-1 py-0.5 text-xs focus:ring-1 focus:ring-indigo-600 outline-none" />
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+
+            <div class="pt-2 border-t border-slate-100 flex items-center gap-2">
+              <button onclick="viewMemo('${student.id}')" class="flex-1 bg-slate-800 hover:bg-slate-700 text-white font-semibold py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5">
+                <i class="fa-solid fa-eye"></i> View Full Marks
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function updateSingleSubjectMark(studentId, subjectIndex, val) {
+      const student = studentsDatabase.find(s => String(s.id) === String(studentId));
+      if (student && student.subjects[subjectIndex]) {
+        student.subjects[subjectIndex].marks = Number(val) || 0;
+        await syncSingleStudentToCloud(student);
+      }
+    }
+
+    async function updateSingleSubjectMaxMarks(studentId, subjectIndex, val) {
+      const newMax = Number(val) || 100;
+      const student = studentsDatabase.find(s => String(s.id) === String(studentId));
+      if (!student) return;
+
+      const subName = student.subjects[subjectIndex].name;
+
+      studentsDatabase.forEach(s => {
+        if (s.class === student.class && s.subjects[subjectIndex] && s.subjects[subjectIndex].name === subName) {
+          s.subjects[subjectIndex].max = newMax;
+        }
+      });
+
+      renderCurrentView();
+      await syncEntireDatabaseToCloud();
+    }
+
+    function renderShareMarksGrid(filterText = "") {
+      const grid = document.getElementById("shareViewContainer");
+      let list = getFilteredStudents(filterText);
+
+      document.getElementById("resultCountBadge").innerText = `Exact Count: ${list.length} Students`;
+
+      if (list.length === 0) {
+        grid.innerHTML = getEmptyStateHTML("No student marks available to share for " + currentSelectedClass);
+        return;
+      }
+
+      grid.innerHTML = list.map(student => {
+        const maxMarks = student.subjects.reduce((a, b) => a + Number(b.max || 0), 0) || 100;
+        const rawGotMarks = student.subjects.reduce((a, b) => a + Number(b.marks || 0), 0);
+        const gotMarks = Number(rawGotMarks.toFixed(2));
+        const percentage = ((gotMarks / maxMarks) * 100).toFixed(1);
+
+        let grade = "A+";
+        if (percentage < 35) grade = "Fail";
+        else if (percentage < 50) grade = "C";
+        else if (percentage < 60) grade = "B";
+        else if (percentage < 75) grade = "A";
+
+        const isPassed = percentage >= 35;
+
+        return `
+          <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 flex flex-col justify-between hover:shadow-md transition">
+            <div>
+              <div class="flex justify-between items-start mb-2">
+                <div>
+                  <span class="text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded bg-indigo-50 text-indigo-700">
+                    S.No: ${student.sno}
+                  </span>
+                  <h4 class="text-base font-bold text-slate-900 mt-1">${student.name}</h4>
+                  <p class="text-xs text-slate-500 flex items-center gap-1 mt-0.5 font-medium">
+                    <i class="fa-brands fa-whatsapp text-emerald-600"></i> +91 ${student.phone}
+                  </p>
+                </div>
+                
+                <div class="flex items-center gap-2">
+                  <div class="text-right">
+                    <div class="text-lg font-black ${isPassed ? 'text-emerald-600' : 'text-rose-600'}">${percentage}%</div>
+                    <span class="text-[10px] font-bold px-1.5 py-0.5 ${isPassed ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'} rounded">
+                      ${isPassed ? 'PASSED' : 'FAILED'} (${grade})
+                    </span>
+                  </div>
+                  <button onclick="deleteStudent('${student.id}')" title="Delete Student" class="w-7 h-7 flex items-center justify-center rounded-lg bg-rose-50 hover:bg-rose-600 text-rose-600 hover:text-white transition">
+                    <i class="fa-solid fa-trash-can text-xs"></i>
+                  </button>
+                </div>
+              </div>
+
+              <div class="bg-slate-50 rounded-xl p-2.5 border border-slate-100 my-2 text-xs space-y-1">
+                <div class="flex justify-between text-slate-600">
+                  <span>Grand Total:</span>
+                  <strong class="text-slate-900">${gotMarks} / ${maxMarks}</strong>
+                </div>
+                <div class="flex justify-between text-slate-600">
+                  <span>WhatsApp Number:</span>
+                  <strong class="text-emerald-700">+91 ${student.phone}</strong>
+                </div>
+              </div>
+            </div>
+
+            <div class="pt-2 border-t border-slate-100 flex items-center gap-2">
+              <button onclick="viewMemo('${student.id}')" class="flex-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5">
+                <i class="fa-solid fa-file-lines"></i> View Marks
+              </button>
+              
+              <button onclick="directShareWhatsAppToStudentPhone('${student.id}')" 
+                      title="Directly opens WhatsApp chat with ${student.phone}"
+                      class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow">
+                <i class="fa-brands fa-whatsapp text-sm"></i> Share WhatsApp
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // ================= DIRECT WHATSAPP SENDER =================
+    function directShareWhatsAppToStudentPhone(studentId) {
+      const student = studentsDatabase.find(s => String(s.id) === String(studentId));
+      if (!student) return;
+
+      // 1. Sanitize student phone number
+      let rawPhone = student.phone || DEFAULT_WHATSAPP;
+      let cleanPhone = String(rawPhone).replace(/\D/g, '');
+
+      // Ensure 10 digits gets prefixed with India country code 91
+      if (cleanPhone.length === 10) {
+        cleanPhone = '91' + cleanPhone;
+      } else if (cleanPhone.length > 10) {
+        cleanPhone = cleanPhone.slice(-10);
+        cleanPhone = '91' + cleanPhone;
+      }
+
+      // 2. Calculations
+      const maxMarks = student.subjects.reduce((a, b) => a + Number(b.max || 0), 0) || 100;
+      const rawGotMarks = student.subjects.reduce((a, b) => a + Number(b.marks || 0), 0);
+      const gotMarks = Number(rawGotMarks.toFixed(2));
+      const percentage = ((gotMarks / maxMarks) * 100).toFixed(1);
+
+      let grade = "A+";
+      if (percentage < 35) grade = "Fail";
+      else if (percentage < 50) grade = "C";
+      else if (percentage < 60) grade = "B";
+      else if (percentage < 75) grade = "A";
+
+      const status = percentage >= 35 ? "PASSED" : "FAILED";
+
+      // 3. Subject-wise breakdown string
+      const subjectsText = student.subjects.map(s => {
+        return `• ${s.name}: *${s.marks}* / ${s.max}`;
+      }).join('\n');
+
+      // 4. Clean formatted WhatsApp message
+      const message = `*K.V.R. HIGH SCHOOL*
+_Official Student Progress Report_
+------------------------------------
+*Student Name:* ${student.name}
+*Class:* ${student.class}
+*S.No:* ${student.sno}
+------------------------------------
+*SUBJECT MARKS:*
+${subjectsText}
+------------------------------------
+*Grand Total:* *${gotMarks} / ${maxMarks}*
+*Percentage:* *${percentage}%*
+*Grade:* *${grade}*
+*Result:* *${status}*
+------------------------------------
+_Headmaster / Principal_
+*K.V.R. High School*`;
+
+      // 5. Open WhatsApp chat directly with student's number
+      const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+      window.open(whatsappUrl, '_blank');
+    }
+
+    function renderPhoneDirectory(filterText = "") {
+      const tbody = document.getElementById("phoneTableBody");
+      let list = getFilteredStudents(filterText);
+
+      document.getElementById("resultCountBadge").innerText = `Exact Count: ${list.length} Students`;
+
+      if (list.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="5" class="p-8 text-center text-slate-400">
+              No registered students found for ${currentSelectedClass}.
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = list.map(student => {
+        return `
+          <tr class="border-b border-slate-100 hover:bg-slate-50 transition">
+            <td class="p-3 font-bold text-slate-900">${student.sno}</td>
+            <td class="p-3 font-semibold text-slate-800">${student.name}</td>
+            <td class="p-3 text-slate-500">${student.class}</td>
+            <td class="p-3">
+              <span class="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-800 px-2.5 py-1 rounded-lg font-bold">
+                <i class="fa-brands fa-whatsapp text-emerald-600"></i> +91 ${student.phone}
+              </span>
+            </td>
+            <td class="p-3 text-center">
+              <div class="flex items-center justify-center gap-2">
+                <button onclick="editStudentPhone('${student.id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition">
+                  <i class="fa-solid fa-pen-to-square"></i> Edit
+                </button>
+                <a href="https://wa.me/91${student.phone}?text=Hello%20Parent%2C%20greetings%20from%20KVR%20High%20School." target="_blank" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold transition">
+                  <i class="fa-brands fa-whatsapp"></i> Chat
+                </a>
+                <button onclick="deleteStudent('${student.id}')" title="Delete Student" class="px-2 py-1 bg-rose-50 hover:bg-rose-600 text-rose-600 hover:text-white rounded-lg text-xs font-semibold transition">
+                  <i class="fa-solid fa-trash-can"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    async function editStudentPhone(studentId) {
+      const student = studentsDatabase.find(s => String(s.id) === String(studentId));
+      if (!student) return;
+
+      const newPhone = prompt(`Enter new 10-digit WhatsApp number for ${student.name}:`, student.phone);
+      if (newPhone !== null) {
+        const cleanPhone = newPhone.replace(/[^0-9]/g, '').slice(-10);
+        if (cleanPhone.length === 10) {
+          student.phone = cleanPhone;
+          await syncSingleStudentToCloud(student);
+          alert(`Phone number updated & synced!`);
+          renderCurrentView();
+        } else {
+          alert("Please enter a valid 10-digit number.");
+        }
+      }
+    }
+
+    async function promptAddNewStudentPhone() {
+      const sno = prompt(`Enter S.No for ${currentSelectedClass}:`);
+      if (!sno) return;
+      const name = prompt(`Enter Real Student Name:`);
+      if (!name) return;
+      const phone = prompt(`Enter Parent's 10-digit WhatsApp Number:`, DEFAULT_WHATSAPP);
+      const cleanPhone = (phone || DEFAULT_WHATSAPP).replace(/[^0-9]/g, '').slice(-10);
+
+      const defaultSubjects = [
+        { name: "Telugu", max: 50, marks: 0 },
+        { name: "Hindi", max: 50, marks: 0 },
+        { name: "English", max: 50, marks: 0 },
+        { name: "Mathematics", max: 50, marks: 0 },
+        { name: "Science", max: 50, marks: 0 },
+        { name: "Social Studies", max: 50, marks: 0 }
+      ];
+
+      const newStudent = {
+        id: String(Date.now()),
+        class: currentSelectedClass,
+        sno: sno.trim(),
+        roll: sno.trim(),
+        name: name.trim(),
+        phone: cleanPhone,
+        subjects: defaultSubjects
+      };
+
+      studentsDatabase.push(newStudent);
+      await syncSingleStudentToCloud(newStudent);
+
+      renderClassTabs();
+      renderCurrentView();
+      alert(`Student "${name}" added & saved to cloud!`);
+    }
+
+    function getFilteredStudents(filterText) {
+      let list = studentsDatabase.filter(s => s.class === currentSelectedClass);
+      if (filterText) {
+        const q = filterText.toLowerCase();
+        list = list.filter(s => 
+          s.name.toLowerCase().includes(q) || 
+          String(s.sno).includes(q) || 
+          s.phone.includes(q)
+        );
+      }
+      return list;
+    }
+
+    function getEmptyStateHTML(msg) {
+      return `
+        <div class="col-span-full py-12 text-center bg-white rounded-2xl border border-dashed border-slate-300">
+          <i class="fa-solid fa-folder-open text-3xl text-slate-300 mb-2"></i>
+          <p class="text-sm font-semibold text-slate-600">${msg}</p>
+        </div>
+      `;
+    }
+
+    function prepareMemoDOM(student) {
+      document.getElementById("memoName").innerText = student.name;
+      document.getElementById("memoRoll").innerText = student.sno;
+      document.getElementById("memoClass").innerText = student.class;
+      document.getElementById("memoPhone").innerText = "+91 " + student.phone;
+
+      const maxMarks = student.subjects.reduce((a, b) => a + Number(b.max || 0), 0) || 100;
+      const rawGotMarks = student.subjects.reduce((a, b) => a + Number(b.marks || 0), 0);
+      const gotMarks = Number(rawGotMarks.toFixed(2));
+      const percentage = ((gotMarks / maxMarks) * 100).toFixed(1);
+
+      document.getElementById("memoMaxTotal").innerText = maxMarks;
+      document.getElementById("memoObtainedTotal").innerText = gotMarks;
+      document.getElementById("memoPercentage").innerText = `${percentage}%`;
+
+      let overallGrade = "A+";
+      if (percentage < 35) overallGrade = "Fail";
+      else if (percentage < 50) overallGrade = "C";
+      else if (percentage < 60) overallGrade = "B";
+      else if (percentage < 75) overallGrade = "A";
+
+      document.getElementById("memoOverallGrade").innerText = overallGrade;
+      document.getElementById("memoStatus").innerText = percentage >= 35 ? "PASSED" : "FAILED";
+      document.getElementById("memoStatus").className = percentage >= 35 ? "text-emerald-700" : "text-rose-700";
+
+      const tbody = document.getElementById("memoSubjectRows");
+      tbody.innerHTML = student.subjects.map(s => {
+        let grade = "A+";
+        const pct = (Number(s.marks) / Number(s.max)) * 100;
+        if (pct < 35) grade = "F";
+        else if (pct < 50) grade = "C";
+        else if (pct < 60) grade = "B";
+        else if (pct < 75) grade = "A";
+
+        return `
+          <tr>
+            <td class="p-2 border border-slate-300 font-medium">${s.name}</td>
+            <td class="p-2 border border-slate-300 text-center font-semibold text-slate-700">${s.max}</td>
+            <td class="p-2 border border-slate-300 text-center font-bold">${Number(s.marks).toFixed(2).replace(/\.00$/, '')}</td>
+            <td class="p-2 border border-slate-300 text-center font-bold ${grade === 'F' ? 'text-rose-600' : 'text-slate-700'}">${grade}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function viewMemo(studentId) {
+      const student = studentsDatabase.find(s => String(s.id) === String(studentId));
+      if (!student) return;
+      prepareMemoDOM(student);
+      document.getElementById("memoDirectWhatsAppBtn").onclick = () => directShareWhatsAppToStudentPhone(student.id);
+      document.getElementById("memoModal").classList.remove("hidden");
+    }
+
+    function closeMemoModal() {
+      document.getElementById("memoModal").classList.add("hidden");
+    }
+  </script>
+</body>
+</html>
