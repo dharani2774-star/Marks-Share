@@ -267,7 +267,7 @@
 
   </div>
 
-  <!-- ================= 3. MARKS MEMO MODAL ================= -->
+  <!-- ================= 3. MARKS MEMO MODAL (USED FOR SCREEN DISPLAY & PNG GENERATION) ================= -->
   <div id="memoModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 hidden overflow-y-auto p-4 flex justify-center items-center">
     <div class="bg-white rounded-3xl max-w-xl w-full p-4 sm:p-6 shadow-2xl relative my-6">
       
@@ -332,7 +332,7 @@
           <i class="fa-solid fa-print"></i> Print
         </button>
         <button id="memoDirectWhatsAppBtn" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2 rounded-xl transition flex items-center gap-1.5 shadow">
-          <i class="fa-brands fa-whatsapp text-sm"></i> Direct WhatsApp to Student Phone
+          <i class="fa-brands fa-whatsapp text-sm"></i> Share Marks Image on WhatsApp
         </button>
       </div>
 
@@ -400,7 +400,7 @@
         const { data, error } = await supabaseClient
           .from('school_students')
           .select('*')
-          .order('sno', { ascending: true });
+          .order('name', { ascending: true }); // Automatically retrieve ordered
 
         if (error) throw error;
 
@@ -638,7 +638,7 @@
         <span class="text-xs font-normal text-slate-500">/ ${modeText}</span>
       `;
 
-      document.getElementById("resultCountBadge").innerText = `Exact Count: ${count} Students`;
+      document.getElementById("resultCountBadge").innerText = `Exact Count: ${count} Students (A-Z)`;
     }
 
     function renderCurrentView(filterText = "") {
@@ -924,6 +924,9 @@
             return;
           }
 
+          // Sort entire database alphabetically by default
+          newDatabase.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+
           studentsDatabase = newDatabase;
           await syncEntireDatabaseToCloud();
 
@@ -962,7 +965,7 @@
       const grid = document.getElementById("entryViewContainer");
       let list = getFilteredStudents(filterText);
 
-      document.getElementById("resultCountBadge").innerText = `Exact Count: ${list.length} Students`;
+      document.getElementById("resultCountBadge").innerText = `Exact Count: ${list.length} Students (A-Z)`;
 
       if (list.length === 0) {
         grid.innerHTML = getEmptyStateHTML("No records found for " + currentSelectedClass);
@@ -1055,7 +1058,7 @@
       const grid = document.getElementById("shareViewContainer");
       let list = getFilteredStudents(filterText);
 
-      document.getElementById("resultCountBadge").innerText = `Exact Count: ${list.length} Students`;
+      document.getElementById("resultCountBadge").innerText = `Exact Count: ${list.length} Students (A-Z)`;
 
       if (list.length === 0) {
         grid.innerHTML = getEmptyStateHTML("No student marks available to share for " + currentSelectedClass);
@@ -1121,7 +1124,7 @@
               </button>
               
               <button onclick="directShareWhatsAppToStudentPhone('${student.id}')" 
-                      title="Directly opens WhatsApp chat with ${student.phone}"
+                      title="Generates Marks Sheet Image & opens WhatsApp for ${student.phone}"
                       class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow">
                 <i class="fa-brands fa-whatsapp text-sm"></i> Share WhatsApp
               </button>
@@ -1131,16 +1134,14 @@
       }).join('');
     }
 
-    // ================= DIRECT WHATSAPP SENDER =================
-    function directShareWhatsAppToStudentPhone(studentId) {
+    // ================= DIRECT WHATSAPP IMAGE GENERATION & SHARING =================
+    async function directShareWhatsAppToStudentPhone(studentId) {
       const student = studentsDatabase.find(s => String(s.id) === String(studentId));
       if (!student) return;
 
-      // 1. Sanitize student phone number
+      // 1. Clean phone number
       let rawPhone = student.phone || DEFAULT_WHATSAPP;
       let cleanPhone = String(rawPhone).replace(/\D/g, '');
-
-      // Ensure 10 digits gets prefixed with India country code 91
       if (cleanPhone.length === 10) {
         cleanPhone = '91' + cleanPhone;
       } else if (cleanPhone.length > 10) {
@@ -1148,54 +1149,82 @@
         cleanPhone = '91' + cleanPhone;
       }
 
-      // 2. Calculations
-      const maxMarks = student.subjects.reduce((a, b) => a + Number(b.max || 0), 0) || 100;
-      const rawGotMarks = student.subjects.reduce((a, b) => a + Number(b.marks || 0), 0);
-      const gotMarks = Number(rawGotMarks.toFixed(2));
-      const percentage = ((gotMarks / maxMarks) * 100).toFixed(1);
+      // 2. Prepare hidden Memo DOM
+      prepareMemoDOM(student);
+      const memoElement = document.getElementById("printableMarksMemo");
 
-      let grade = "A+";
-      if (percentage < 35) grade = "Fail";
-      else if (percentage < 50) grade = "C";
-      else if (percentage < 60) grade = "B";
-      else if (percentage < 75) grade = "A";
+      const wasHidden = document.getElementById("memoModal").classList.contains("hidden");
+      if (wasHidden) {
+        document.getElementById("memoModal").classList.remove("hidden");
+      }
 
-      const status = percentage >= 35 ? "PASSED" : "FAILED";
+      try {
+        // 3. Render HTML Report to High-Res Image (scale: 2 for sharp crisp text)
+        const canvas = await html2canvas(memoElement, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: "#ffffff"
+        });
 
-      // 3. Subject-wise breakdown string
-      const subjectsText = student.subjects.map(s => {
-        return `• ${s.name}: *${s.marks}* / ${s.max}`;
-      }).join('\n');
+        canvas.toBlob(async (blob) => {
+          const fileName = `${student.name.replace(/\s+/g, '_')}_MarksMemo.png`;
+          const imageFile = new File([blob], fileName, { type: "image/png" });
 
-      // 4. Clean formatted WhatsApp message
-      const message = `*K.V.R. HIGH SCHOOL*
-_Official Student Progress Report_
-------------------------------------
-*Student Name:* ${student.name}
-*Class:* ${student.class}
-*S.No:* ${student.sno}
-------------------------------------
-*SUBJECT MARKS:*
-${subjectsText}
-------------------------------------
-*Grand Total:* *${gotMarks} / ${maxMarks}*
-*Percentage:* *${percentage}%*
-*Grade:* *${grade}*
-*Result:* *${status}*
-------------------------------------
-_Headmaster / Principal_
-*K.V.R. High School*`;
+          // Web Share API (Works natively on Android/iOS browsers to send image directly to WhatsApp contact)
+          if (navigator.canShare && navigator.canShare({ files: [imageFile] })) {
+            try {
+              await navigator.share({
+                files: [imageFile],
+                title: `${student.name} - Official Marks Memo`,
+                text: `K.V.R. High School Progress Report for ${student.name} (${student.class})`
+              });
+              return;
+            } catch (shareErr) {
+              // User cancelled share or fallback to direct URL
+            }
+          }
 
-      // 5. Open WhatsApp chat directly with student's number
-      const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
-      window.open(whatsappUrl, '_blank');
+          // Fallback for Desktop/PC: Copy image to clipboard and trigger auto-download
+          const downloadUrl = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = downloadUrl;
+          a.download = fileName;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+
+          try {
+            await navigator.clipboard.write([
+              new ClipboardItem({ "image/png": blob })
+            ]);
+            alert(`Marks Memo Image copied to clipboard and saved as "${fileName}"!\n\nOpening WhatsApp chat for +${cleanPhone}. Just press Ctrl + V to send the image!`);
+          } catch (clipErr) {
+            alert(`Marks Memo Image saved as "${fileName}"!\nOpening WhatsApp chat for +${cleanPhone}...`);
+          }
+
+          const defaultMsg = encodeURIComponent(`Greetings from K.V.R. High School. Here is the official Progress Report Card for ${student.name} (${student.class}).`);
+          const whatsappUrl = `https://wa.me/${cleanPhone}?text=${defaultMsg}`;
+          window.open(whatsappUrl, "_blank");
+
+        }, "image/png");
+
+      } catch (e) {
+        console.error("Image generation failed:", e);
+        // Fallback text link if canvas fails
+        const textMsg = encodeURIComponent(`*K.V.R. HIGH SCHOOL*\nMarks Sheet for *${student.name}* (${student.class})`);
+        window.open(`https://wa.me/${cleanPhone}?text=${textMsg}`, "_blank");
+      } finally {
+        if (wasHidden) {
+          document.getElementById("memoModal").classList.add("hidden");
+        }
+      }
     }
 
     function renderPhoneDirectory(filterText = "") {
       const tbody = document.getElementById("phoneTableBody");
       let list = getFilteredStudents(filterText);
 
-      document.getElementById("resultCountBadge").innerText = `Exact Count: ${list.length} Students`;
+      document.getElementById("resultCountBadge").innerText = `Exact Count: ${list.length} Students (A-Z)`;
 
       if (list.length === 0) {
         tbody.innerHTML = `
@@ -1283,6 +1312,8 @@ _Headmaster / Principal_
       };
 
       studentsDatabase.push(newStudent);
+      // Re-sort alphabetically after addition
+      studentsDatabase.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
       await syncSingleStudentToCloud(newStudent);
 
       renderClassTabs();
@@ -1290,8 +1321,13 @@ _Headmaster / Principal_
       alert(`Student "${name}" added & saved to cloud!`);
     }
 
+    // Returns filtered students sorted Alphabetically (A to Z) by student name
     function getFilteredStudents(filterText) {
       let list = studentsDatabase.filter(s => s.class === currentSelectedClass);
+      
+      // ALPHABETICAL ORDER SORT (A to Z)
+      list.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+
       if (filterText) {
         const q = filterText.toLowerCase();
         list = list.filter(s => 
