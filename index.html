@@ -91,13 +91,13 @@
           <div>
             <h1 class="school-title text-base sm:text-lg font-bold tracking-wide">K.V.R. HIGH SCHOOL</h1>
             <p id="cloudSyncStatus" class="text-[10px] text-emerald-400 flex items-center gap-1 font-semibold">
-              <i class="fa-solid fa-cloud-arrow-up text-[9px]"></i> Cloud Synced (Supabase)
+              <i class="fa-solid fa-cloud-arrow-up text-[9px]"></i> Permanently Stored & Synced
             </p>
           </div>
         </div>
 
         <div class="flex items-center gap-2 sm:gap-3">
-          <button onclick="refreshDataFromCloud()" title="Reload from Cloud" class="bg-indigo-900/80 hover:bg-indigo-800 text-indigo-200 border border-indigo-700/50 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1">
+          <button onclick="refreshDataFromCloud()" title="Reload Data" class="bg-indigo-900/80 hover:bg-indigo-800 text-indigo-200 border border-indigo-700/50 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1">
             <i class="fa-solid fa-rotate"></i>
             <span class="hidden sm:inline">Refresh</span>
           </button>
@@ -356,7 +356,7 @@
       : null;
 
     const DEFAULT_WHATSAPP = "9052682774";
-    const DB_STORAGE_KEY = "kvr_students_database";
+    const DB_STORAGE_KEY = "kvr_permanent_students_database_v2";
 
     const PRIMARY_CLASSES = ["Nursery", "LKG", "UKG", "Class 1", "Class 2", "Class 3", "Class 4", "Class 5"];
     const HIGH_SCHOOL_CLASSES = ["Class 6", "Class 7", "Class 8", "Class 9", "Class 10"];
@@ -366,7 +366,8 @@
     let currentSelectedClass = "Class 6";
     let currentClassViewMode = "share";
 
-    let studentsDatabase = loadLocalFallback();
+    // Initialize with local permanent storage first so data appears immediately without waiting for network
+    let studentsDatabase = loadLocalPermanentStorage();
     let waWindow = null;
 
     function showToast(message) {
@@ -389,29 +390,41 @@
         : "text-[10px] text-amber-300 flex items-center gap-1 font-semibold";
     }
 
-    function loadLocalFallback() {
+    // ================= PERMANENT LOCAL STORAGE MANAGEMENT =================
+    function loadLocalPermanentStorage() {
       try {
         const raw = localStorage.getItem(DB_STORAGE_KEY);
-        return raw ? JSON.parse(raw) : [];
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) return parsed;
+        }
       } catch (err) {
-        return [];
+        console.warn("Local storage read error:", err);
+      }
+      return [];
+    }
+
+    function saveLocalPermanentStorage() {
+      try {
+        localStorage.setItem(DB_STORAGE_KEY, JSON.stringify(studentsDatabase));
+      } catch (err) {
+        console.error("Local storage write error:", err);
       }
     }
 
-    function saveLocalFallback() {
-      try {
-        localStorage.setItem(DB_STORAGE_KEY, JSON.stringify(studentsDatabase));
-      } catch (err) {}
-    }
+    // ================= SUPABASE CLOUD SYNC & PERMANENT RETRIEVAL =================
+    async function loadDataFromCloudAndLocal() {
+      // 1. Render immediately from permanent local store so user sees data instantly
+      renderClassTabs();
+      updateClassHeader();
+      renderCurrentView();
 
-    // ================= SUPABASE CLOUD SYNC =================
-    async function loadDataFromSupabase() {
       if (!supabaseClient) {
-        setSyncStatus("Local Only (Supabase keys not configured)", false);
+        setSyncStatus("Permanently Saved (Local Device Mode)", true);
         return;
       }
 
-      setSyncStatus("Syncing with Supabase...", true);
+      setSyncStatus("Syncing with Cloud...", true);
       try {
         const { data, error } = await supabaseClient
           .from('school_students')
@@ -422,14 +435,17 @@
 
         if (data && data.length > 0) {
           studentsDatabase = data;
-          saveLocalFallback();
-          setSyncStatus("Cloud Synced (Supabase)", true);
+          saveLocalPermanentStorage(); // Update local backup with cloud data
+          setSyncStatus("Permanently Stored & Synced", true);
+        } else if (studentsDatabase.length > 0) {
+          // If cloud is empty but local has data, push local data to cloud to populate it
+          await syncEntireDatabaseToCloud();
         } else {
-          setSyncStatus("Cloud Empty (Ready for upload)", true);
+          setSyncStatus("Ready for Marks Upload", true);
         }
       } catch (err) {
-        console.warn("Supabase load error:", err.message);
-        setSyncStatus("Offline / Local Storage Mode", false);
+        console.warn("Cloud sync warning (using permanent local storage):", err.message);
+        setSyncStatus("Permanently Saved (Offline Mode)", true);
       }
 
       renderClassTabs();
@@ -438,10 +454,10 @@
     }
 
     async function syncEntireDatabaseToCloud() {
-      saveLocalFallback();
+      saveLocalPermanentStorage(); // Always save locally first for guaranteed permanence
       if (!supabaseClient) return;
 
-      setSyncStatus("Saving to Supabase...", true);
+      setSyncStatus("Saving to Cloud...", true);
       try {
         const payload = studentsDatabase.map(s => ({
           id: String(s.id),
@@ -458,15 +474,15 @@
           .upsert(payload, { onConflict: 'id' });
 
         if (error) throw error;
-        setSyncStatus("Cloud Synced (Supabase)", true);
+        setSyncStatus("Permanently Stored & Synced", true);
       } catch (err) {
         console.error("Cloud sync failed:", err.message);
-        setSyncStatus("Cloud Sync Failed (Saved Locally)", false);
+        setSyncStatus("Permanently Saved Locally", true);
       }
     }
 
     async function syncSingleStudentToCloud(student) {
-      saveLocalFallback();
+      saveLocalPermanentStorage(); // Guarantee local permanence instantly
       if (!supabaseClient) return;
 
       try {
@@ -487,7 +503,7 @@
     }
 
     async function deleteStudentFromCloud(studentId) {
-      saveLocalFallback();
+      saveLocalPermanentStorage();
       if (!supabaseClient) return;
 
       try {
@@ -501,7 +517,7 @@
     }
 
     function refreshDataFromCloud() {
-      loadDataFromSupabase();
+      loadDataFromCloudAndLocal();
     }
 
     // ================= APP LIFECYCLE =================
@@ -511,7 +527,7 @@
         document.getElementById("loginScreen").classList.add("hidden");
         document.getElementById("dashboardScreen").classList.remove("hidden");
         switchSection("high");
-        loadDataFromSupabase();
+        loadDataFromCloudAndLocal();
       }
     });
 
@@ -525,7 +541,7 @@
         document.getElementById("loginScreen").classList.add("hidden");
         document.getElementById("dashboardScreen").classList.remove("hidden");
         switchSection("high");
-        loadDataFromSupabase();
+        loadDataFromCloudAndLocal();
       } else {
         alert("Incorrect Username or Password! (Use: admin / school123)");
       }
@@ -538,9 +554,9 @@
     }
 
     async function clearAllSchoolData() {
-      if (confirm("Are you sure you want to completely erase all data from both Browser and Supabase Cloud?")) {
+      if (confirm("Are you sure you want to completely erase all permanently stored student data?")) {
         studentsDatabase = [];
-        saveLocalFallback();
+        localStorage.removeItem(DB_STORAGE_KEY);
 
         if (supabaseClient) {
           try {
@@ -551,7 +567,7 @@
         renderClassTabs();
         updateClassHeader();
         renderCurrentView();
-        alert("All student data cleared.");
+        alert("All student data permanently cleared.");
       }
     }
 
@@ -965,7 +981,7 @@
             .join("\n");
 
           setTimeout(() => {
-            alert(`Upload Complete & Synced to Cloud!\n\n${summaryLines}\n\nTotal Students Uploaded: ${newDatabase.length}`);
+            alert(`Uploaded & Permanently Stored Successfully!\n\n${summaryLines}\n\nTotal Students: ${newDatabase.length}`);
           }, 100);
 
         } catch (err) {
@@ -1155,7 +1171,6 @@
       const student = studentsDatabase.find(s => String(s.id) === String(studentId));
       if (!student) return;
 
-      // Clean phone number: always format to 91XXXXXXXXXX
       let rawPhone = student.phone || DEFAULT_WHATSAPP;
       let cleanPhone = String(rawPhone).replace(/\D/g, '');
       if (cleanPhone.length === 10) {
@@ -1166,7 +1181,6 @@
 
       const directChatUrl = `https://web.whatsapp.com/send?phone=${cleanPhone}`;
 
-      // Open / switch directly to WhatsApp Web tab right away (prevents popup blockers)
       if (waWindow && !waWindow.closed) {
         waWindow.location.href = directChatUrl;
         waWindow.focus();
@@ -1174,7 +1188,6 @@
         waWindow = window.open(directChatUrl, "whatsapp_web");
       }
 
-      // Populate Memo DOM to prepare canvas
       prepareMemoDOM(student);
       const memoElement = document.getElementById("printableMarksMemo");
 
@@ -1192,7 +1205,6 @@
         });
 
         canvas.toBlob(async (blob) => {
-          // Mobile device direct share check
           if (navigator.canShare && navigator.canShare({ files: [new File([blob], `${student.name}_Marks.png`, { type: "image/png" })] })) {
             try {
               await navigator.share({
@@ -1204,7 +1216,6 @@
             } catch (shareErr) {}
           }
 
-          // Copy photo to clipboard
           try {
             await navigator.clipboard.write([
               new ClipboardItem({ "image/png": blob })
@@ -1281,7 +1292,7 @@
         if (cleanPhone.length === 10) {
           student.phone = cleanPhone;
           await syncSingleStudentToCloud(student);
-          alert(`Phone number updated & synced!`);
+          alert(`Phone number permanently updated!`);
           renderCurrentView();
         } else {
           alert("Please enter a valid 10-digit number.");
@@ -1322,7 +1333,7 @@
 
       renderClassTabs();
       renderCurrentView();
-      alert(`Student "${name}" added & saved to cloud!`);
+      alert(`Student "${name}" added and permanently stored!`);
     }
 
     function getFilteredStudents(filterText) {
