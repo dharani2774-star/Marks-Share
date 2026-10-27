@@ -465,14 +465,14 @@
       }
     }
 
-    // ================= APP LIFECYCLE =================
-    window.addEventListener("DOMContentLoaded", () => {
+    // ================= APP LIFECYCLE (REFRESH PROOF) =================
+    window.addEventListener("DOMContentLoaded", async () => {
       const isLoggedIn = sessionStorage.getItem("kvr_logged_in") === "true";
       if (isLoggedIn) {
         document.getElementById("loginScreen").classList.add("hidden");
         document.getElementById("dashboardScreen").classList.remove("hidden");
         switchSection("high");
-        loadDataFromCloud();
+        await loadDataFromCloud();
       }
     });
 
